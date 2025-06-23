@@ -42,7 +42,7 @@ def solve_captcha(base64_image):
         print(f"CapSolver Error: {result}")
         return None
 
-
+#
 def main():
     print("Starting captcha solver...")
     
