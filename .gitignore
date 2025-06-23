@@ -1,3 +1,4 @@
 /.env
 /image.txt
 *.html
+*.json

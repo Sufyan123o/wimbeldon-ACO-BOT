@@ -65,8 +65,8 @@ def main():
         img_elem = driver.find_element(By.ID, "img_captcha")
         captcha_screenshot = img_elem.screenshot_as_png
         b64_data = base64.b64encode(captcha_screenshot).decode("utf-8")        
-        with open("image.txt", "w") as f:
-            f.write(b64_data)
+        # with open("image.txt", "w") as f:
+        #     f.write(b64_data)
         print("Solving captcha with CapSolver...")
         result = solve_captcha(b64_data)
         
@@ -78,8 +78,6 @@ def main():
                 secret_input.clear()
                 secret_input.send_keys(str(result))
                 driver.execute_script("submitCaptcha();")
-                
-                # time.sleep(3)  # Wait for response
                 
                 # Check if we're past the captcha (look for next page elements)
                 try:
@@ -109,27 +107,27 @@ def main():
             print("Waiting for page to load...")
             
             # Simple check: if ENTER button appears, click it
+            # try:
+            #     enter_button = driver.find_element(By.ID, "actionButton")
+            #     if enter_button.is_displayed():
+            #         print("ENTER button found! Clicking it...")
+            #         enter_button.click()
+            #         time.sleep(3)
+            # except:
+            #     print("No ENTER button found, proceeding...")            # 1) Accept cookies if they're still up
             try:
-                enter_button = driver.find_element(By.ID, "actionButton")
-                if enter_button.is_displayed():
-                    print("ENTER button found! Clicking it...")
-                    enter_button.click()
-                    time.sleep(3)
-            except:
-                print("No ENTER button found, proceeding...")            # 1) Accept cookies if they're still up
-            try:
-                btn = WebDriverWait(driver, 5).until(
+                btn = WebDriverWait(driver, 2).until(
                     EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
                 )
                 print("Accepting cookies...")
                 btn.click()
-                time.sleep(1)
+                # time.sleep(1)
             except:
                 print("No cookie banner found, continuing...")
             
             # 2) Wait for email/password fields to be visible
             print("Looking for login form...")
-            wait = WebDriverWait(driver, 3)
+            wait = WebDriverWait(driver, 2)
             email_field = wait.until(EC.visibility_of_element_located((By.ID, "loginID")))
             password_field = driver.find_element(By.ID, "password")
             
@@ -147,11 +145,10 @@ def main():
                     password_field.clear()
                     password_field.send_keys(password)
                     # 4) Hit Enter in the password field to submit
-                    print("Submitting login form by pressing Enter...")
                     password_field.send_keys(Keys.RETURN)
-                    print("✅ Sent Enter key to password field!")
+                    print(" Enter key pressed to password field!")
                     
-                    time.sleep(3)
+                    time.sleep(7)
                 else:
                     print("No email/password found in environment variables!")
                     print("Please set LOGIN_EMAIL and LOGIN_PASSWORD in your .env file")
@@ -162,15 +159,81 @@ def main():
             print("Getting final page HTML...")
             result_html = driver.page_source
             
-            print("="*50)
-            print("RESULT PAGE HTML:")
-            print("="*50)
-            # print(result_html)
-            
             # Optionally save to file
             with open("result_page.html", "w", encoding="utf-8") as f:
                 f.write(result_html)
             print("\nResult page saved to 'result_page.html'")
+            
+            # Extract cookies and make API request
+            print("\nExtracting session cookies for API requests...")
+            cookies = driver.get_cookies()
+            
+            # Create a requests session with the cookies from the browser
+            session = requests.Session()
+            for cookie in cookies:
+                session.cookies.set(cookie['name'], cookie['value'], domain=cookie.get('domain'))
+              # Set required headers based on the endpoint requirements
+            headers = {
+                'accept': 'application/json, text/plain, */*',
+                'accept-language': 'en',
+                'referer': 'https://ticketsale.wimbledon.com/secured/content',
+                'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-origin',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+                'x-api-key': '344152a6-fa57-4e09-951f-96b8a38927d9',
+                'X-Secutix-Host': 'ticketsale.wimbledon.com'
+            }
+            
+            # Try to extract CSRF token from page if available
+            try:
+                csrf_token = driver.execute_script("return window.csrfToken || document.querySelector('meta[name=\"csrf-token\"]')?.content")
+                if csrf_token:
+                    headers['x-csrf-token'] = csrf_token
+                    print(f"Found CSRF token: {csrf_token[:20]}...")
+            except:
+                print("No CSRF token found, proceeding without it...")
+            
+            # Make the API request
+            api_url = "https://ticketsale.wimbledon.com/tnwr/v1/catalog"
+            params = {
+                'maxPerformances': 50,
+                'maxTimeslots': 50,
+                'maxPerformanceDays': 3,
+                'maxTimeslotDays': 3,
+                'includeMetadata': 'true'
+            }
+            
+            print(f"\nMaking API request to: {api_url}")
+            try:
+                api_response = session.get(api_url, headers=headers, params=params, verify=False)
+                print(f"API Response Status: {api_response.status_code}")
+                
+                if api_response.status_code == 200:
+                    # Save the API response
+                    with open("catalog_response.json", "w", encoding="utf-8") as f:
+                        f.write(api_response.text)
+                    print("✅ API response saved to 'catalog_response.json'")
+                    
+                    # Print a preview of the response
+                    try:
+                        response_data = api_response.json()
+                        print(f"\nAPI Response Preview:")
+                        print(f"Response keys: {list(response_data.keys()) if isinstance(response_data, dict) else 'Not a dict'}")
+                        if isinstance(response_data, dict) and len(response_data) > 0:
+                            for key, value in list(response_data.items())[:3]:  # Show first 3 keys
+                                print(f"  {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
+                    except:
+                        print("Response is not valid JSON or too large to preview")
+                else:
+                    print(f"❌ API request failed with status {api_response.status_code}")
+                    print(f"Response: {api_response.text[:500]}...")
+                    
+            except Exception as api_error:
+                print(f"❌ Error making API request: {api_error}")
             
         else:
             print("Failed to solve captcha")
