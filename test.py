@@ -354,7 +354,6 @@ def automated_add_to_cart(driver, buy_link, day_name, start_time=None):
                         print(
                             "   Found available ticket category, setting quantity to 2..."
                         )
-
                         # Use JavaScript to set the value to 2 and trigger events immediately
                         driver.execute_script(
                             "arguments[0].value = '2'; arguments[0].dispatchEvent(new Event('change', { bubbles: true })); arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
@@ -371,8 +370,11 @@ def automated_add_to_cart(driver, buy_link, day_name, start_time=None):
         if not ticket_added:
             print("❌ No available tickets found on the page")
             return False
-        # Give the page a moment to update after quantity change
-        # time.sleep(1)        # Look for and click the "Add to cart" button
+
+        # Look for and click the "Add to cart" button
+        cart_process_start = time.time()
+        print("   Looking for 'Add to cart' button...")
+
         # The button is actually a link with id="book" inside #addToCartButtonContainer
         try:
             # Wait for the add to cart button to be present (reduced timeout for speed)
@@ -441,15 +443,18 @@ def automated_add_to_cart(driver, buy_link, day_name, start_time=None):
                 if has_errors:
                     print("❌ Purchase failed due to errors on page")
                     return False
-
                 # Check if we were successful (look for cart page or confirmation)
                 current_url = driver.current_url
                 if "cart" in current_url.lower() or "basket" in current_url.lower():
+                    cart_process_time = time.time() - cart_process_start
+                    total_time = time.time() - start_time
                     print(
                         "🎉 Successfully added tickets to cart! (URL indicates cart page)"
                     )
+                    print(
+                        f"   ⏱️ Cart process: {cart_process_time:.3f}s | Total time: {total_time:.3f}s"
+                    )
                     return True
-
                 # Additional success indicators - look for cart-related elements
                 success_indicators = [
                     ".cart",
@@ -465,11 +470,15 @@ def automated_add_to_cart(driver, buy_link, day_name, start_time=None):
                     try:
                         elements = driver.find_elements(By.CSS_SELECTOR, indicator)
                         if elements and any(elem.is_displayed() for elem in elements):
+                            cart_process_time = time.time() - cart_process_start
+                            total_time = time.time() - start_time
                             print(f"🎉 Success indicator found: {indicator}")
+                            print(
+                                f"   ⏱️ Cart process: {cart_process_time:.3f}s | Total time: {total_time:.3f}s"
+                            )
                             return True
                     except:
                         continue
-
                 # Check if the total amount has changed (indicating tickets were added)
                 try:
                     total_elements = driver.find_elements(
@@ -483,7 +492,12 @@ def automated_add_to_cart(driver, buy_link, day_name, start_time=None):
                                 and amount_text != "0"
                                 and "£0" not in amount_text
                             ):
+                                cart_process_time = time.time() - cart_process_start
+                                total_time = time.time() - start_time
                                 print(f"🎉 Non-zero amount detected: {amount_text}")
+                                print(
+                                    f"   ⏱️ Cart process: {cart_process_time:.3f}s | Total time: {total_time:.3f}s"
+                                )
                                 return True
                 except:
                     pass
@@ -610,6 +624,7 @@ def send_failure_notification(day_name, advantage_name, total_time=None):
     Send a failure notification to Discord when purchase attempt fails
     """
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+
     if not webhook_url:
         return False
 
@@ -718,6 +733,8 @@ def monitor_performances(session, headers, known_states=None, driver=None):
                                     previous_availability == "NONE"
                                     and current_availability != "NONE"
                                 ):
+                                    # Send Discord notification first
+                                    send_discord_webhook(name, buy_link, advantage_name)
                                     # Start timing from the moment we detect a change
                                     restock_detected_time = time.time()
 
@@ -729,11 +746,8 @@ def monitor_performances(session, headers, known_states=None, driver=None):
                                     )
                                     print(f"   Buy Link: {buy_link}")
 
-                                    # Send Discord notification first
-                                    send_discord_webhook(name, buy_link, advantage_name)
-
                                     # Attempt automated purchase immediately
-                                    print("🚀 Starting automated purchase process...")
+                                    # print("🚀 Starting automated purchase process...")
                                     if driver:
                                         purchase_success = automated_add_to_cart(
                                             driver,
