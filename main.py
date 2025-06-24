@@ -1,10 +1,11 @@
 import requests
+import random
 import base64
 import os
 import urllib3
 import time
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -75,7 +76,6 @@ def bypass_captcha(driver):
         secret_input.clear()
         secret_input.send_keys(str(result))
         driver.execute_script("submitCaptcha();")
-        
         # Check if we're past the captcha (look for next page elements)
         try:
             # If we see the action button or login form, captcha worked
@@ -83,6 +83,21 @@ def bypass_captcha(driver):
                 driver.find_elements(By.ID, "loginID")):
                 bypassed = True
                 print("✅ Captcha bypassed!")
+                
+                # Check if we're in a waiting room and need to click Enter button
+                try:
+                    enter_button = driver.find_element(By.ID, "actionButton")
+                    if enter_button.is_displayed():
+                        print("🕐 Waiting room detected! Waiting for Enter button to be clickable...")
+                        # Wait up to 15 seconds for the button to become clickable
+                        wait = WebDriverWait(driver, 15)
+                        clickable_button = wait.until(EC.element_to_be_clickable((By.ID, "actionButton")))
+                        clickable_button.click()
+                        print("✅ Enter button clicked! Proceeding to main site...")
+                        time.sleep(2)  # Give it a moment to load
+                except Exception as e:
+                    print(f"No waiting room Enter button found or already past it: {e}")
+                    
         except:
             pass
         
@@ -108,7 +123,7 @@ def handle_login(driver):
     
     # Accept cookies if they're still up
     try:
-        btn = WebDriverWait(driver, 2).until(
+        btn = WebDriverWait(driver, 20).until(
             EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
         )
         print("Accepting cookies...")
@@ -118,7 +133,7 @@ def handle_login(driver):
     
     # Wait for email/password fields to be visible
     print("Looking for login form...")
-    wait = WebDriverWait(driver, 2)
+    wait = WebDriverWait(driver, 20)
     email_field = wait.until(EC.visibility_of_element_located((By.ID, "loginID")))
     password_field = driver.find_element(By.ID, "password")
     
@@ -224,7 +239,7 @@ def send_discord_webhook(day_name, buy_link, advantage_name):
     
     embed = {
         "title": "🎾 Wimbledon Tickets Available!",
-        "description": f"**{day_name}** tickets are now available!",
+        "description": f"[**{day_name}** tickets are now available!]({buy_link})",
         "color": 0x00ff00,  # Green color
         "fields": [
             {
@@ -236,16 +251,13 @@ def send_discord_webhook(day_name, buy_link, advantage_name):
                 "name": "Advantage Type",
                 "value": advantage_name,
                 "inline": True
-            },
-            {
+            },            {
                 "name": "Purchase Link",
                 "value": f"[Buy Tickets]({buy_link})",
                 "inline": False
-            }
-        ],
-        "timestamp": datetime.utcnow().isoformat(),
+            }        ],
         "footer": {
-            "text": "Wimbledon Ticket Monitor"
+            "text": f"Wimbledon Ticket Monitor – {datetime.now(UTC).strftime('%d. %m. %Y %H:%M:%S')}"
         }
     }
     
@@ -279,23 +291,20 @@ def send_test_webhook():
     
     embed = {
         "title": "🧪 Wimbledon Monitor Test",
-        "description": "Test notification - Your webhook is working correctly!",
+        "description": "Test notification",
         "color": 0x0099ff,  # Blue color
         "fields": [
             {
                 "name": "Status",
                 "value": "✅ Webhook Connected",
                 "inline": True
-            },
-            {
+            },            {
                 "name": "Monitoring",
-                "value": "Ready to detect ticket availability",
+                "value": " ",
                 "inline": True
-            }
-        ],
-        "timestamp": datetime.utcnow().isoformat(),
+            }        ],
         "footer": {
-            "text": "Wimbledon Ticket Monitor - Test Message"
+            "text": f"Wimbledon Ticket Monitor – Test Message – {datetime.now(UTC).strftime('%d. %m. %Y %H:%M:%S')}"
         }
     }
     
@@ -337,8 +346,7 @@ def monitor_performances(session, headers, known_states=None):
         
         if response.status_code != 200:
             print(f"❌ API request failed with status {response.status_code}")
-            return known_states
-        
+            return known_states        
         data = response.json()
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{current_time}] Checking for availability changes...")
@@ -413,8 +421,8 @@ def start_monitoring(session, headers):
     try:
         while True:
             known_states = monitor_performances(session, headers, known_states)
-            time.sleep(30)  # Wait 30 seconds before next check
-            
+            #random sleep between 0.8 and 0.1 seconds
+            time.sleep(random.uniform(0.1, 0.8))
     except KeyboardInterrupt:
         print("\n⏹️ Monitoring stopped by user.")
     except Exception as e:
@@ -489,7 +497,8 @@ def main():
         
         # Step 3: Save the resulting page HTML
         save_page_html(driver)
-          # Step 4: Make initial API request and get session
+        # Step 4: Make initial API request and get session
+        time.sleep(5)  # Wait for page to load after login
         session, headers = make_api_request(driver)
         
         if not session or not headers:
