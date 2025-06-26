@@ -610,7 +610,7 @@ def send_success_notification(day_name, advantage_name, total_time=None):
         },
     }
 
-    payload = {"embeds": [embed]}
+    payload = {"content": "@here", "embeds": [embed]}
 
     try:
         response = requests.post(webhook_url, json=payload)
@@ -667,7 +667,7 @@ def send_failure_notification(day_name, advantage_name, total_time=None):
         return False
 
 
-def monitor_performances(session, headers, known_states=None, driver=None):
+def monitor_performances(session, headers, known_states=None, driver=None, automation_enabled=True):
     """
     Monitor performances for availability changes in Centre Court events
     """
@@ -746,9 +746,9 @@ def monitor_performances(session, headers, known_states=None, driver=None):
                                     )
                                     print(f"   Buy Link: {buy_link}")
 
-                                    # Attempt automated purchase immediately
-                                    # print("🚀 Starting automated purchase process...")
-                                    if driver:
+                                    # Attempt automated purchase only if automation is enabled
+                                    if automation_enabled and driver:
+                                        print("🚀 Starting automated purchase process...")
                                         purchase_success = automated_add_to_cart(
                                             driver,
                                             buy_link,
@@ -770,6 +770,11 @@ def monitor_performances(session, headers, known_states=None, driver=None):
                                             send_success_notification(
                                                 name, advantage_name, total_time
                                             )
+                                            # Disable automation after successful purchase
+                                            automation_enabled = False
+                                            print("🛑 ATC DISABLED")
+                                            print("📋 You can now manually proceed to checkout in the browser")
+                                            print("🔍 Monitoring will continue for additional opportunities")
                                         else:
                                             print(
                                                 f"❌ Automated purchase failed - tickets likely unavailable or sold out"
@@ -781,7 +786,10 @@ def monitor_performances(session, headers, known_states=None, driver=None):
                                             send_failure_notification(
                                                 name, advantage_name, total_time
                                             )
-                                    else:
+                                    elif not automation_enabled:
+                                        print("⚠️ ATC is DISABLED - tickets detected but no action taken")
+                                        print("📋 Manual intervention required if you want these tickets")
+                                    elif not driver:
                                         print(
                                             "⚠️ WebDriver not available for automated purchase"
                                         )
@@ -794,11 +802,11 @@ def monitor_performances(session, headers, known_states=None, driver=None):
         if not changes_found:
             print("   No availability changes detected.")
 
-        return known_states
+        return known_states, automation_enabled
 
     except Exception as e:
         print(f"❌ Error during monitoring: {e}")
-        return known_states
+        return known_states, automation_enabled
 
 
 def start_monitoring(session, headers, driver=None):
@@ -814,10 +822,13 @@ def start_monitoring(session, headers, driver=None):
     print("Checking every 30 seconds. Press Ctrl+C to stop.\n")
 
     known_states = {}
+    automation_enabled = True  # Flag to control automated purchasing
 
     try:
         while True:
-            known_states = monitor_performances(session, headers, known_states, driver)
+            known_states, automation_enabled = monitor_performances(
+                session, headers, known_states, driver, automation_enabled
+            )
             # random sleep between 0.8 and 0.1 seconds
             time.sleep(random.uniform(0.1, 0.8))
     except KeyboardInterrupt:
