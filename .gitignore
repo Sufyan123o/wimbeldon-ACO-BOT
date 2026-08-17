@@ -1,4 +1,39 @@
-/.env
-/image.txt
+# Environment / credentials
+.env
+image.txt
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Browser / runtime artifacts
 *.html
-*.json
+result_page.html
+failed_requests.log
+
+# ChromeDriver temp files
+chromedriver
+chromedriver.exe
+/downloaded_files/
+
+# Third-party browser extensions
+/capsolver-browser-extension/
+
+# Data files with sensitive info (proxy lists, scraper results)
+*.csv
+screwfix_stock_all_stores.json
+screwfix_stock_result.json
+catalog_response.json
+
+# Unrelated scraper files
+test_screwfix_stock.py
+
+# OS artefacts
+.DS_Store
+Thumbs.db

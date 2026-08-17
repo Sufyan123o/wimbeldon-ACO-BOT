@@ -1,0 +1,17 @@
+# Wimbledon Ticket Monitor - Python Dependencies
+
+# Core HTTP / browser automation
+requests>=2.32.0
+urllib3>=2.0.0
+curl-cffi>=0.7.0
+
+# Selenium / undetectable Chrome
+selenium>=4.20.0
+seleniumbase>=4.29.0
+chromedriver-autoinstaller>=0.6.4
+
+# HTML parsing (for user-agent scraping)
+beautifulsoup4>=4.12.0
+
+# Environment variable management
+python-dotenv>=1.0.0
